@@ -1,10 +1,987 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>My 3D Game</title>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0,
+               maximum-scale=1.0, user-scalable=no">
+
+<title>BlockWorld 3D</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #87ceeb;
+    font-family: Arial, sans-serif;
+    touch-action: none;
+}
+
+#game {
+    position: fixed;
+    inset: 0;
+}
+
+canvas {
+    display: block;
+}
+
+#top {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    color: white;
+    font-weight: bold;
+    text-shadow: 2px 2px #000;
+}
+
+.box {
+    background: rgba(0,0,0,.55);
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+#crosshair {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%,-50%);
+    color: white;
+    font-size: 25px;
+    text-shadow: 2px 2px black;
+}
+
+#buttons {
+    position: fixed;
+    right: 12px;
+    bottom: 90px;
+    display: grid;
+    gap: 7px;
+}
+
+button {
+    border: 0;
+    border-radius: 9px;
+    background: rgba(0,0,0,.65);
+    color: white;
+    padding: 12px;
+    font-size: 16px;
+}
+
+#movement {
+    position: fixed;
+    left: 12px;
+    bottom: 85px;
+    display: grid;
+    grid-template-columns: 50px 50px 50px;
+    gap: 5px;
+}
+
+#movement button {
+    width: 50px;
+    height: 45px;
+    padding: 0;
+    font-size: 22px;
+}
+
+.empty {
+    visibility: hidden;
+}
+
+#hotbar {
+    position: fixed;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+}
+
+.slot {
+    width: 52px;
+    height: 55px;
+    background: rgba(0,0,0,.65);
+    border: 3px solid #555;
+    border-radius: 6px;
+    color: white;
+    text-align: center;
+    font-size: 10px;
+    padding-top: 4px;
+}
+
+.slot.selected {
+    border-color: white;
+}
+
+.block-icon {
+    width: 28px;
+    height: 28px;
+    margin: auto;
+    border: 1px solid black;
+}
+
+#crafting {
+    position: fixed;
+    display: none;
+    top: 70px;
+    right: 10px;
+    width: 260px;
+    background: rgba(20,20,20,.95);
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+}
+
+.recipe {
+    width: 100%;
+    margin-top: 8px;
+}
+</style>
 </head>
+
 <body>
-    <h1>My Block Game</h1>
-    <p>My game is working!</p>
+
+<div id="game"></div>
+
+<div id="top">
+    <div class="box">🌍 BlockWorld</div>
+    <div class="box" id="mode">Creative</div>
+</div>
+
+<div id="crosshair">+</div>
+
+<div id="movement">
+    <button class="empty"></button>
+    <button id="forward">▲</button>
+    <button class="empty"></button>
+
+    <button id="left">◀</button>
+    <button id="back">▼</button>
+    <button id="right">▶</button>
+</div>
+
+<div id="buttons">
+    <button id="break">⛏ Break</button>
+    <button id="place">＋ Place</button>
+    <button id="jump">⬆ Jump</button>
+    <button id="craft">Crafting</button>
+    <button id="changeMode">Mode</button>
+</div>
+
+<div id="hotbar"></div>
+
+<div id="crafting">
+    <h3>Crafting Table</h3>
+
+    <button class="recipe" onclick="craftPlanks()">
+        🪵 1 Log → 4 Planks
+    </button>
+
+    <button class="recipe" onclick="craftGlass()">
+        🟨 4 Sand → 1 Glass
+    </button>
+
+    <button class="recipe" onclick="closeCrafting()">
+        Close
+    </button>
+</div>
+
+<script type="module">
+
+import * as THREE from
+"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js";
+
+/* =========================
+   WORLD
+========================= */
+
+const scene = new THREE.Scene();
+
+scene.background =
+    new THREE.Color(0x87ceeb);
+
+scene.fog =
+    new THREE.Fog(0x87ceeb, 15, 60);
+
+
+/* =========================
+   CAMERA
+========================= */
+
+const camera =
+    new THREE.PerspectiveCamera(
+        70,
+        innerWidth / innerHeight,
+        0.1,
+        100
+    );
+
+camera.position.set(0, 3, 8);
+
+
+/* =========================
+   RENDERER
+========================= */
+
+const renderer =
+    new THREE.WebGLRenderer({
+        antialias: true
+    });
+
+renderer.setSize(
+    innerWidth,
+    innerHeight
+);
+
+renderer.setPixelRatio(
+    Math.min(devicePixelRatio, 2)
+);
+
+document
+    .getElementById("game")
+    .appendChild(renderer.domElement);
+
+
+/* =========================
+   LIGHT
+========================= */
+
+scene.add(
+    new THREE.HemisphereLight(
+        0xffffff,
+        0x557755,
+        2
+    )
+);
+
+const sunlight =
+    new THREE.DirectionalLight(
+        0xffffff,
+        2
+    );
+
+sunlight.position.set(
+    20,
+    30,
+    10
+);
+
+scene.add(sunlight);
+
+
+/* =========================
+   BLOCK MATERIALS
+========================= */
+
+const materials = {
+
+    grass:
+        new THREE.MeshLambertMaterial({
+            color: 0x55aa33
+        }),
+
+    dirt:
+        new THREE.MeshLambertMaterial({
+            color: 0x8b5a2b
+        }),
+
+    stone:
+        new THREE.MeshLambertMaterial({
+            color: 0x888888
+        }),
+
+    wood:
+        new THREE.MeshLambertMaterial({
+            color: 0x8b5a2b
+        }),
+
+    plank:
+        new THREE.MeshLambertMaterial({
+            color: 0xc18a50
+        }),
+
+    sand:
+        new THREE.MeshLambertMaterial({
+            color: 0xddc477
+        }),
+
+    glass:
+        new THREE.MeshLambertMaterial({
+            color: 0x9eeaff,
+            transparent: true,
+            opacity: .5
+        })
+};
+
+
+/* =========================
+   BLOCK SYSTEM
+========================= */
+
+const blocks = [];
+
+function createBlock(
+    x,
+    y,
+    z,
+    type
+) {
+
+    const geometry =
+        new THREE.BoxGeometry(
+            1,
+            1,
+            1
+        );
+
+    const cube =
+        new THREE.Mesh(
+            geometry,
+            materials[type]
+        );
+
+    cube.position.set(
+        x + .5,
+        y + .5,
+        z + .5
+    );
+
+    cube.userData = {
+        x: x,
+        y: y,
+        z: z,
+        type: type
+    };
+
+    cube.castShadow = true;
+    cube.receiveShadow = true;
+
+    scene.add(cube);
+
+    blocks.push(cube);
+
+    return cube;
+}
+
+
+/* =========================
+   GROUND
+========================= */
+
+for (
+    let x = -12;
+    x <= 12;
+    x++
+) {
+
+    for (
+        let z = -12;
+        z <= 12;
+        z++
+    ) {
+
+        createBlock(
+            x,
+            0,
+            z,
+            "grass"
+        );
+
+    }
+}
+
+
+/* =========================
+   TREES
+========================= */
+
+function createTree(x,z) {
+
+    for (
+        let y = 1;
+        y <= 4;
+        y++
+    ) {
+
+        createBlock(
+            x,
+            y,
+            z,
+            "wood"
+        );
+    }
+
+    for (
+        let dx = -1;
+        dx <= 1;
+        dx++
+    ) {
+
+        for (
+            let dz = -1;
+            dz <= 1;
+            dz++
+        ) {
+
+            createBlock(
+                x + dx,
+                5,
+                z + dz,
+                "grass"
+            );
+        }
+    }
+}
+
+createTree(-5,-4);
+createTree(5,-2);
+createTree(-7,5);
+createTree(7,6);
+
+
+/* =========================
+   ANIMALS
+========================= */
+
+const animals = [];
+
+function createAnimal(x,z) {
+
+    const animal =
+        new THREE.Group();
+
+    const body =
+        new THREE.Mesh(
+            new THREE.BoxGeometry(
+                .9,.6,1.3
+            ),
+            new THREE.MeshLambertMaterial({
+                color: 0xffffff
+            })
+        );
+
+    body.position.y = .8;
+
+    animal.add(body);
+
+
+    const head =
+        new THREE.Mesh(
+            new THREE.BoxGeometry(
+                .65,.65,.65
+            ),
+            new THREE.MeshLambertMaterial({
+                color: 0xffffff
+            })
+        );
+
+    head.position.set(
+        0,
+        1.15,
+        .75
+    );
+
+    animal.add(head);
+
+
+    for (
+        const [dx,dz] of [
+            [-.3,-.4],
+            [.3,-.4],
+            [-.3,.4],
+            [.3,.4]
+        ]
+    ) {
+
+        const leg =
+            new THREE.Mesh(
+                new THREE.BoxGeometry(
+                    .18,.55,.18
+                ),
+                new THREE.MeshLambertMaterial({
+                    color: 0x777777
+                })
+            );
+
+        leg.position.set(
+            dx,
+            .35,
+            dz
+        );
+
+        animal.add(leg);
+    }
+
+    animal.position.set(
+        x+.5,
+        0,
+        z+.5
+    );
+
+    scene.add(animal);
+
+    animals.push(animal);
+}
+
+createAnimal(3,3);
+createAnimal(-3,4);
+createAnimal(8,-6);
+
+
+/* =========================
+   INVENTORY
+========================= */
+
+const inventory = {
+
+    grass: 99,
+    dirt: 99,
+    stone: 99,
+    wood: 99,
+    plank: 99,
+    sand: 99,
+    glass: 20
+};
+
+const hotbar =
+[
+    "grass",
+    "dirt",
+    "stone",
+    "wood",
+    "plank",
+    "sand",
+    "glass"
+];
+
+const names =
+{
+    grass:"Grass",
+    dirt:"Dirt",
+    stone:"Stone",
+    wood:"Log",
+    plank:"Plank",
+    sand:"Sand",
+    glass:"Glass"
+};
+
+const colours =
+{
+    grass:"#55aa33",
+    dirt:"#8b5a2b",
+    stone:"#888888",
+    wood:"#8b5a2b",
+    plank:"#c18a50",
+    sand:"#ddc477",
+    glass:"#9eeaff"
+};
+
+let selected = "grass";
+
+function updateHotbar() {
+
+    const bar =
+        document.getElementById(
+            "hotbar"
+        );
+
+    bar.innerHTML = "";
+
+    hotbar.forEach(
+        type => {
+
+            const slot =
+                document.createElement(
+                    "div"
+                );
+
+            slot.className =
+                "slot " +
+                (
+                    type === selected
+                    ? "selected"
+                    : ""
+                );
+
+            slot.innerHTML =
+                `<div
+                    class="block-icon"
+                    style="background:${colours[type]}"
+                 ></div>
+                 ${names[type]}`;
+
+            slot.onclick =
+                () => {
+
+                    selected = type;
+
+                    updateHotbar();
+                };
+
+            bar.appendChild(slot);
+        }
+    );
+}
+
+updateHotbar();
+
+
+/* =========================
+   RAYCASTING
+========================= */
+
+function getTargetBlock() {
+
+    const ray =
+        new THREE.Raycaster();
+
+    ray.setFromCamera(
+        new THREE.Vector2(0,0),
+        camera
+    );
+
+    const hit =
+        ray.intersectObjects(
+            blocks
+        )[0];
+
+    return hit;
+}
+
+
+/* =========================
+   BREAK BLOCK
+========================= */
+
+function breakBlock() {
+
+    const hit =
+        getTargetBlock();
+
+    if (!hit)
+        return;
+
+    const block =
+        hit.object;
+
+    const index =
+        blocks.indexOf(block);
+
+    if (index !== -1)
+        blocks.splice(index,1);
+
+    scene.remove(block);
+}
+
+
+/* =========================
+   PLACE BLOCK
+========================= */
+
+function placeBlock() {
+
+    const hit =
+        getTargetBlock();
+
+    if (!hit)
+        return;
+
+    const block =
+        hit.object;
+
+    const normal =
+        hit.face.normal;
+
+    const data =
+        block.userData;
+
+    const x =
+        data.x + normal.x;
+
+    const y =
+        data.y + normal.y;
+
+    const z =
+        data.z + normal.z;
+
+    createBlock(
+        x,
+        y,
+        z,
+        selected
+    );
+}
+
+
+/* =========================
+   MOVEMENT
+========================= */
+
+function move(
+    x,
+    z
+) {
+
+    const speed = .25;
+
+    camera.position.x +=
+        x * speed;
+
+    camera.position.z +=
+        z * speed;
+}
+
+document
+    .getElementById("forward")
+    .onclick =
+    () => move(0,-1);
+
+document
+    .getElementById("back")
+    .onclick =
+    () => move(0,1);
+
+document
+    .getElementById("left")
+    .onclick =
+    () => move(-1,0);
+
+document
+    .getElementById("right")
+    .onclick =
+    () => move(1,0);
+
+
+/* =========================
+   JUMP
+========================= */
+
+let velocityY = 0;
+
+document
+    .getElementById("jump")
+    .onclick =
+    () => {
+
+        if (
+            camera.position.y <= 3.05
+        ) {
+
+            velocityY = .25;
+        }
+    };
+
+
+/* =========================
+   BREAK / PLACE BUTTONS
+========================= */
+
+document
+    .getElementById("break")
+    .onclick =
+    breakBlock;
+
+document
+    .getElementById("place")
+    .onclick =
+    placeBlock;
+
+
+/* =========================
+   GAME MODE
+========================= */
+
+let gameMode = "creative";
+
+document
+    .getElementById("changeMode")
+    .onclick =
+    () => {
+
+        gameMode =
+            gameMode === "creative"
+            ? "survival"
+            : "creative";
+
+        document
+            .getElementById("mode")
+            .textContent =
+            gameMode
+                .charAt(0)
+                .toUpperCase()
+                +
+            gameMode.slice(1);
+    };
+
+
+/* =========================
+   CRAFTING
+========================= */
+
+document
+    .getElementById("craft")
+    .onclick =
+    () => {
+
+        document
+            .getElementById("crafting")
+            .style.display =
+            "block";
+    };
+
+function closeCrafting() {
+
+    document
+        .getElementById("crafting")
+        .style.display =
+        "none";
+}
+
+window.closeCrafting =
+    closeCrafting;
+
+
+window.craftPlanks =
+    function() {
+
+        if (
+            inventory.wood >= 1
+        ) {
+
+            inventory.wood--;
+
+            inventory.plank += 4;
+
+            updateHotbar();
+        }
+    };
+
+
+window.craftGlass =
+    function() {
+
+        if (
+            inventory.sand >= 4
+        ) {
+
+            inventory.sand -= 4;
+
+            inventory.glass++;
+
+            updateHotbar();
+        }
+    };
+
+
+/* =========================
+   KEYBOARD
+========================= */
+
+window.addEventListener(
+    "keydown",
+    event => {
+
+        if (event.key === "1")
+            selected = hotbar[0];
+
+        if (event.key === "2")
+            selected = hotbar[1];
+
+        if (event.key === "3")
+            selected = hotbar[2];
+
+        if (event.key === "4")
+            selected = hotbar[3];
+
+        if (event.key === "5")
+            selected = hotbar[4];
+
+        if (event.key === "6")
+            selected = hotbar[5];
+
+        if (event.key === "7")
+            selected = hotbar[6];
+
+        if (event.key === "f")
+            breakBlock();
+
+        if (event.key === "r")
+            placeBlock();
+
+        if (event.code === "Space")
+            document
+                .getElementById("jump")
+                .click();
+
+        updateHotbar();
+    }
+);
+
+
+/* =========================
+   ANIMATION
+========================= */
+
+function animate() {
+
+    requestAnimationFrame(
+        animate
+    );
+
+    velocityY -= .012;
+
+    camera.position.y +=
+        velocityY;
+
+    if (
+        camera.position.y < 3
+    ) {
+
+        camera.position.y = 3;
+
+        velocityY = 0;
+    }
+
+    renderer.render(
+        scene,
+        camera
+    );
+}
+
+animate();
+
+
+/* =========================
+   SCREEN RESIZE
+========================= */
+
+window.addEventListener(
+    "resize",
+    () => {
+
+        camera.aspect =
+            innerWidth /
+            innerHeight;
+
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(
+            innerWidth,
+            innerHeight
+        );
+    }
+);
+
+</script>
+
 </body>
-  </html>
+    </html>
